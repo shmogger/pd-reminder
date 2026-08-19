@@ -90,7 +90,12 @@ async function listEvents(token, calendarId, timeMin, timeMax) {
   );
   if (!res.ok) throw new Error(`Calendar ${calendarId} ${res.status}: ${await res.text()}`);
   const j = await res.json();
-  return j.events || j.items || [];
+  const items = j.items || [];
+  console.log(`[cal ${calendarId}] window ${timeMin} .. ${timeMax} -> ${items.length} raw events`);
+  for (const ev of items) {
+    console.log(`   - "${ev.summary}" @ ${ev.start && (ev.start.dateTime || ev.start.date)}`);
+  }
+  return items;
 }
 
 /**
@@ -159,10 +164,15 @@ async function createDraft(token, mime) {
 
 async function main() {
   const token = await getGoogleToken();
-  const now = Date.now();
-  // Events between 7 and 8 days from now.
-  const timeMin = new Date(now + CONFIG.LEAD_MIN_DAYS * 86400000).toISOString();
-  const timeMax = new Date(now + CONFIG.LEAD_MAX_DAYS * 86400000).toISOString();
+  // Whole-day window: catch anything landing on calendar-days 7 and 8 ahead,
+  // regardless of what time the job runs. Anchor to UTC midnight so a late-day
+  // run doesn't push the window past a morning event (which dropped the Aug 26
+  // PDs when the boundary was a raw now+7*24h).
+  const midnightUtc = new Date();
+  midnightUtc.setUTCHours(0, 0, 0, 0);
+  const base = midnightUtc.getTime();
+  const timeMin = new Date(base + CONFIG.LEAD_MIN_DAYS * 86400000).toISOString();
+  const timeMax = new Date(base + (CONFIG.LEAD_MAX_DAYS + 1) * 86400000).toISOString();
 
   const summary = { detected: 0, drafted: 0, skippedExisting: 0, skippedNoAttendees: 0 };
 
