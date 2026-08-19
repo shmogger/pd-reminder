@@ -103,15 +103,21 @@ async function listEvents(token, calendarId, timeMin, timeMax) {
  * Gmail indexes raw headers, so we can find prior drafts by searching for the
  * event ID. Returns true if a reminder draft for this event already exists.
  */
+/**
+ * Double-send guard. Each draft carries  X-PD-Reminder: <eventId>.
+ * Uses the drafts.list endpoint (permitted by gmail.compose) with a q filter,
+ * rather than messages.list (which needs a broader read scope). Returns true
+ * if a reminder draft for this event already exists.
+ */
 async function reminderAlreadyExists(token, eventId) {
-  const q = encodeURIComponent(`in:drafts "X-PD-Reminder: ${eventId}"`);
+  const q = encodeURIComponent(`"X-PD-Reminder: ${eventId}"`);
   const res = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${q}&maxResults=1`,
+    `https://gmail.googleapis.com/gmail/v1/users/me/drafts?q=${q}&maxResults=1`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
-  if (!res.ok) throw new Error(`Gmail search ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(`Gmail drafts.list ${res.status}: ${await res.text()}`);
   const j = await res.json();
-  return (j.resultSizeEstimate || 0) > 0;
+  return (j.drafts && j.drafts.length > 0) || false;
 }
 
 function buildMime(ev, recipients) {
