@@ -56,7 +56,12 @@ function isPdEvent(ev) {
   const title = (ev.summary || '').toLowerCase().trim();
   if (!title) return false;
   if (CONFIG.TITLE_BLOCKLIST.some((b) => title.includes(b))) return false;
-  return title.includes(CONFIG.TITLE_MATCH);
+  if (!title.includes(CONFIG.TITLE_MATCH)) return false;
+  // Only remind on events the watched owner actually organized. Customer-set-up
+  // meetings (where they invited the owner) have organizer.self = false and are
+  // skipped — we don't remind the customer about their own meeting.
+  if (!(ev.organizer && ev.organizer.self)) return false;
+  return true;
 }
 
 function attendeesToRemind(ev) {
